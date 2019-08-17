@@ -58,6 +58,7 @@ public class Acceptor implements Runnable{
                         doAccept(key);
                     }
                 }
+                logger.info("acceptation done!");
             }
         }catch (Exception e) {
             e.printStackTrace();
@@ -70,8 +71,6 @@ public class Acceptor implements Runnable{
         clientChannel.setOption(StandardSocketOptions.TCP_NODELAY, true);
         logger.info("remote {} connected", clientChannel.getRemoteAddress());
         clientChannel.configureBlocking(false);
-        // unregister from acceptor's selector
-        key.cancel();
         // do init
         WrapSocketChannel wrapSocketChannel = new WrapSocketChannel(clientChannel);
         initializer.initChannel(wrapSocketChannel);

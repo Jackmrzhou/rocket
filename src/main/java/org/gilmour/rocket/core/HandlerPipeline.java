@@ -20,8 +20,8 @@ public class HandlerPipeline {
     }
 
     private void initPipeline(){
-        HeadContext = new DefaultChannelHandlerContext(new EmptyChannelReader());
-        TailContext = new DefaultChannelHandlerContext(new TailChannelHandler());
+        HeadContext = new DefaultChannelHandlerContext(new EmptyChannelReader(this));
+        TailContext = new DefaultChannelHandlerContext(new TailChannelHandler(this));
         HeadContext.next = TailContext;
         HeadContext.prev = null;
         TailContext.prev = HeadContext;
@@ -34,5 +34,9 @@ public class HandlerPipeline {
 
     public void fireInactive() {
 
+    }
+
+    WrapSocketChannel getChannel(){
+        return this.channel;
     }
 }

@@ -20,7 +20,7 @@ public class NioEventLoopGroup {
 
     public void AddNewChannel(WrapSocketChannel channel) throws IOException {
         counter++;
-        if (counter > nioEventLoops.size()){
+        if (counter >= nioEventLoops.size()){
             counter = 0;
         }
         nioEventLoops.get(counter).AddNewChannel(channel);

@@ -9,15 +9,19 @@ import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 
+import org.gilmour.rocket.channel.ChannelOutboundBuffer.Entry;
+
 public class WrapSocketChannel {
     private final Logger logger = LoggerFactory.getLogger(WrapSocketChannel.class);
     private HandlerPipeline pipeline;
     private java.nio.channels.SocketChannel JdkChannel;
     private volatile SelectionKey selectionKey;
+    private ChannelOutboundBuffer outboundBuffer;
 
     public WrapSocketChannel(java.nio.channels.SocketChannel channel) {
         this.JdkChannel = channel;
         this.pipeline = new HandlerPipeline(this);
+        this.outboundBuffer = new ChannelOutboundBuffer();
     }
 
     public SelectionKey register(Selector sel, int ops,
@@ -58,6 +62,65 @@ public class WrapSocketChannel {
         } catch (Exception e) {
             // todo: fire exception
             e.printStackTrace();
+        }
+    }
+
+    // fired by write
+    // doesn't actually flush into socket
+    public void write(Object msg, ChannelPromise promise) {
+        logger.debug("receive write request");
+        if (msg instanceof ByteBuffer) {
+            this.outboundBuffer.addBuffer((ByteBuffer) msg, promise);
+        } else {
+            logger.warn("not ByteBuffer type");
+        }
+    }
+
+    public void flush() {
+        logger.debug("receive flush request");
+        if (this.outboundBuffer.isEmpty()){
+            return;
+        }
+
+        Entry entry = this.outboundBuffer.get();
+
+        // try write
+        try {
+            int sz = JdkChannel.write(entry.getBuffer());
+            logger.debug("initial write total {}", sz);
+            if (sz <= 0) {
+                logger.debug("channel unwritable now");
+                incompleteWrite(true);
+            }
+            while (sz > 0) {
+                if (!entry.getBuffer().hasRemaining()) {
+                    entry.getPromise().setDone();
+                    this.outboundBuffer.pop();
+                    if (this.outboundBuffer.isEmpty()){
+                        break;
+                    }
+                    entry = this.outboundBuffer.get();
+                }
+
+                sz = JdkChannel.write(entry.getBuffer());
+            }
+
+            if (this.outboundBuffer.isEmpty()){
+                incompleteWrite(false);
+            }
+        }catch (Exception e) {
+            // todo: fire exception
+            e.printStackTrace();
+        }
+    }
+
+    private void incompleteWrite(boolean incomplete) {
+        int ops = this.selectionKey.interestOps();
+        if (incomplete) {
+            this.selectionKey.interestOps(ops | SelectionKey.OP_WRITE);
+        } else {
+            // all buffers are written, unregister the event
+            this.selectionKey.interestOps(ops & (~SelectionKey.OP_WRITE));
         }
     }
 }
