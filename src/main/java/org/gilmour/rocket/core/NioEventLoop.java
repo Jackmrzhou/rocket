@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class NioEventLoop implements Runnable{
     private Logger logger = LoggerFactory.getLogger(NioEventLoop.class);
@@ -20,6 +21,7 @@ public class NioEventLoop implements Runnable{
     private ConcurrentLinkedQueue<WrapSocketChannel> NewChannelQueue;
     private long totalChannels;
     private ExecutorService singleThreadExec;
+    private volatile AtomicBoolean wakenUp;
 
     public NioEventLoop(ExecutorService globalThreadPool){
         this.globalThreadPool = globalThreadPool;
@@ -56,11 +58,9 @@ public class NioEventLoop implements Runnable{
 
     public void AddNewChannel(WrapSocketChannel channel) throws IOException {
         NewChannelQueue.add(channel);
-        if (totalChannels == 0) {
-            //may need kick off
-            selector.wakeup();
-            selector.selectNow();
-        }
+        //may need kick off
+        selector.wakeup();
+        //wakenUp.getAndSet(true);
     }
 
     private void registerAll() throws IOException{
@@ -85,6 +85,11 @@ public class NioEventLoop implements Runnable{
             if (key.isReadable()) {
                 WrapSocketChannel channel = (WrapSocketChannel) key.attachment();
                 channel.read();
+            }
+
+            if (key.isWritable()) {
+                WrapSocketChannel channel = (WrapSocketChannel) key.attachment();
+                channel.flush();
             }
 
             keyIterator.remove();
